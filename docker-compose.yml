@@ -1,0 +1,35 @@
+services:
+  quickchart:
+    image: ianw/quickchart
+    container_name: quickchart
+    restart: always
+    ports:
+      - "3400:3400"
+    networks:
+      - n8n-net
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=Asia/Kolkata
+      - TZ=Asia/Kolkata
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_PYTHON_ENABLED=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - n8n-net
+    depends_on:
+      - quickchart
+
+networks:
+  n8n-net:
+    driver: bridge
+
+volumes:
+  n8n_data:
+    external: true
