@@ -8,6 +8,18 @@ services:
     networks:
       - n8n-net
 
+
+  html-renderer:
+    image: zenato/puppeteer-renderer:latest
+    container_name: html-renderer
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - ENABLE_HAR=false
+    networks:
+      - n8n-net
+
   n8n:
     image: docker.n8n.io/n8nio/n8n
     container_name: n8n

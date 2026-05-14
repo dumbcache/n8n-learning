@@ -1,0 +1,258 @@
+{
+  "name": "SR Visualization",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "XLS Select",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "UploadFile",
+              "fieldType": "file",
+              "fieldName": "SRData",
+              "acceptFileTypes": ".xls,.xlsx",
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        96
+      ],
+      "id": "2cda1bd2-c044-426f-896c-0db2bce79ef5",
+      "name": "On form submission",
+      "webhookId": "baca4ae9-acf0-4548-9c87-f828a1bc448c"
+    },
+    {
+      "parameters": {
+        "jsCode": "const images = $input.all().reduce((acc, item, index) => {\n  acc[`data${index}`] = item.binary.data;\n  return acc;\n}, {});\nreturn [{ json: {}, binary: images }]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        96
+      ],
+      "id": "0e3db8dc-a57e-450a-bbf1-70316cb3c873",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all();\nconst totalCount = input.length;\nconst totals = {}\nconst monthsWise = {};\nconst statusOnWhole = {};\nconst srTypes = {};\nconst srPriorities = {};\nconst hcEndUserKeys = new Set();\nconst statusKeys = new Set();\nconst monthKeys = new Set();\n\nfor (let i = 0; i < totalCount; i++) {\n  const record = input[i].json;\n  const cre = record.Cre;\n  const status = record.Status;\n  const type = record.Type || \"NoType\";\n  const priority = record.Priority.length > 3 ? record.Priority : \"No Priority\";\n\n  statusKeys.add(status);\n  hcEndUserKeys.add(record[\"HC/End User\"]);\n  monthKeys.add(cre);\n\n  if (cre) {\n    monthsWise[cre] || (monthsWise[cre] = {});\n    totals[cre] = (totals[cre] || 0) + 1;\n    monthsWise[cre][record[\"HC/End User\"]] =\n      (monthsWise[cre][record[\"HC/End User\"]] || 0) + 1;\n    monthsWise[cre][status] = (monthsWise[cre][status] || 0) + 1;\n  }\n  if (status) {\n    statusOnWhole[status] = (statusOnWhole[status] || 0) + 1;\n  }\n  if (type) {\n    srTypes[type] = (srTypes[type] || 0) + 1;\n  }\n  if (priority) {\n    srPriorities[priority] = (srPriorities[priority] || 0) + 1;\n  }\n}\n\nreturn [\n  { totalCount, totals, monthsWise, statusOnWhole, srTypes, srPriorities },\n  {\n    monthKeys: [...monthKeys],\n    hcEndUserKeys: [...hcEndUserKeys],\n    statusKeys: [...statusKeys],\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        96
+      ],
+      "id": "4774a3da-df1b-4f85-b723-f990a1094d53",
+      "name": "Data Aggregator"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all();\nconst data = input[0].json;\nconst meta = input[1].json;\nconst hceKeys = meta[\"hcEndUserKeys\"] || [];\nconst monthKeys = meta[\"monthKeys\"] || [];\nconst statusKeys = meta[\"statusKeys\"] || [];\n\nfunction chart(type, labels, dataKeys, dataSource, title, stacked) {\n  let dataSets = [];\n  let options = {};\n  if (type === \"bar\" || type === \"line\") {\n    dataSets = dataKeys.map((dkey) => {\n      const dataArr = labels.map((lkey) => {\n        return dataSource[lkey][dkey];\n      });\n      return {\n        label: dkey?.trim(),\n        data: dataArr,\n      };\n    });\n    options = {\n      title: { display: true, text: title },\n      legend: {\n        display: true,\n        position: \"right\",\n        labels: {\n          fontStyle: \"bold\",\n          fontSize: 10,\n          boxWidth: 12,\n        },\n      },\n      scales: {\n        xAxes: [\n          {\n            gridLines: {\n              display: false,\n              drawBorder: false,\n            },\n            stacked: stacked,\n            categoryPercentage: 0.5,\n            barPercentage: 1,\n          },\n        ],\n        yAxes: [\n          {\n            gridLines: {\n              drawBorder: false,\n            },\n            stacked: stacked,\n            ticks: { beginAtZero: true },\n          },\n        ],\n      },\n      plugins: {\n        datalabels: {\n          display: true,\n          color: stacked === true ? \"#000\" : \"#000\",\n          anchor: stacked === true ? \"center\" : \"end\",\n          align: stacked === true ? \"center\" : \"top\",\n          font: {\n            weight: \"bold\",\n            size: 11,\n          },\n        },\n      },\n    };\n  }\n  if (type === \"pie\") {\n    const d = Object.fromEntries(\n      Object.entries(dataSource).sort((a, b) => b[1] - a[1]),\n    );\n    labels = Object.keys(d);\n    dataSets = [\n      {\n        borderWidth: 1,\n        borderColor: \"#fff\",\n        data: Object.values(d),\n      },\n    ];\n    options = {\n      title: { display: true, text: title },\n      legend: {\n        display: true,\n        position: \"right\",\n        labels: {\n          fontStyle: \"bold\",\n          fontSize: 10,\n          boxWidth: 12,\n        },\n      },\n      plugins: {\n        datalabels: {\n          display: true,\n          color: \"#000\",\n          anchor: \"center\",\n          align: \"center\",\n          font: {\n            weight: \"bold\",\n            size: 11,\n          },\n        },\n      },\n    };\n  }\n  const config = {\n    type: type,\n    data: {\n      labels: labels,\n      datasets: dataSets,\n    },\n    options: options,\n    plugins: [],\n  };\n\n  return {\n    backgroundColor: \"#fff\",\n    width: 500,\n    height: 300,\n    devicePixelRatio: 1.0,\n    chart: config,\n  };\n}\nconst bar1 = chart(\n  \"bar\",\n  monthKeys,\n  hceKeys,\n  data.monthsWise,\n  \"Service Interation Raised By HC vs End User\",\n  false,\n);\nconst bar2 = chart(\n  \"bar\",\n  monthKeys,\n  statusKeys,\n  data.monthsWise,\n  \"Service Interction Summary Bases on Status\",\n  true,\n);\nconst pie1 = chart(\n  \"pie\",\n  null,\n  null,\n  data.srPriorities,\n  \"Service Request by Priority\",\n  false,\n);\nconst pie2 = chart(\n  \"pie\",\n  null,\n  null,\n  data.totals,\n  \"Service Requests Monthly\",\n  false,\n);\nreturn [bar1, bar2, pie1, pie2];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        96
+      ],
+      "id": "00553f5b-cbf0-49e1-aa8d-2ba0e6a1aa18",
+      "name": "Generate ChartCodes"
+    },
+    {
+      "parameters": {
+        "binaryPropertyName": "CSVData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        96
+      ],
+      "id": "37f62336-2921-4ac8-b811-49cefa9928ad",
+      "name": "Convert to CSV"
+    },
+    {
+      "parameters": {
+        "binaryPropertyName": "CSVData",
+        "options": {
+          "fromLine": 5
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        96
+      ],
+      "id": "be227bf0-8c3a-4d98-8214-28b292dc7ea9",
+      "name": "Extract from CSV"
+    },
+    {
+      "parameters": {
+        "operation": "xls",
+        "binaryPropertyName": "=SRData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        96
+      ],
+      "id": "8878a82c-17dc-4bf0-bb01-c10515b193fd",
+      "name": "Extract from Excel"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://quickchart:3400/chart",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $input.item.json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1312,
+        96
+      ],
+      "id": "047b9315-5a9a-4006-af83-1ef44b719033",
+      "name": "Generate Charts",
+      "executeOnce": false,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const binaries = $input.item.binary;\n\nconst chartsB64 = [\n  binaries.data0 ? `data:${binaries.data0.mimeType};base64,${binaries.data0.data}` : null,\n  binaries.data1 ? `data:${binaries.data1.mimeType};base64,${binaries.data1.data}` : null,\n  binaries.data2 ? `data:${binaries.data2.mimeType};base64,${binaries.data2.data}` : null,\n  binaries.data3 ? `data:${binaries.data3.mimeType};base64,${binaries.data3.data}` : null\n].filter(Boolean);\n\nconst chartLabels = [\n  \"Resource Allocation (HC vs End User)\",\n  \"Ticket Status Distribution Summary\",\n  \"Service Request Priority Tracking\",\n  \"Service Request Category Types Volumetrics\"\n];\n\nconst gridItemsHtml = chartsB64.map((b64Url, index) => `\n  <div class=\"card\">\n    <div class=\"card-header\">${chartLabels[index]}</div>\n    <img src=\"${b64Url}\" />\n  </div>\n`).join('');\n\nconst htmlDashboard = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body {\n      font-family: 'Helvetica Neue', Arial, sans-serif;\n      background-color: #f8f9fa;\n      margin: 0;\n      padding: 35px;\n      width: 1100px; /* Locked width canvas for 2-column rendering */\n      box-sizing: border-box;\n    }\n    .header {\n      display: flex;\n      justify-content: space-between;\n      align-items: center;\n      border-bottom: 2px solid #e9ecef;\n      padding-bottom: 15px;\n      margin-bottom: 30px;\n    }\n    .title {\n      font-size: 26px;\n      font-weight: 800;\n      color: #1e293b;\n      letter-spacing: -0.5px;\n    }\n    .meta-date {\n      font-size: 13px;\n      color: #64748b;\n      font-weight: 500;\n      background: #edf2f7;\n      padding: 6px 12px;\n      border-radius: 20px;\n    }\n    .dashboard-grid {\n      display: grid;\n      grid-template-columns: repeat(2, 1fr); /* Forces exactly 2 charts per row */\n      gap: 25px; /* Margin space between individual cards */\n    }\n    .card {\n      background-color: #ffffff;\n      border-radius: 12px;\n      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);\n      border: 1px solid #e2e8f0;\n      padding: 20px;\n      display: flex;\n      flex-direction: column;\n      align-items: center;\n    }\n    .card-header {\n      font-size: 12px;\n      font-weight: 700;\n      color: #475569;\n      text-transform: uppercase;\n      letter-spacing: 0.5px;\n      margin-bottom: 15px;\n      align-self: flex-start;\n      border-left: 3px solid #3b82f6;\n      padding-left: 8px;\n    }\n    .card img {\n      width: 100%;\n      max-width: 480px;\n      height: auto;\n      display: block;\n    }\n  </style>\n</head>\n<body>\n  <div class=\"header\">\n    <div class=\"title\">Operations Performance Dashboard</div>\n    <div class=\"meta-date\">Generated: ${new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}</div>\n  </div>\n  <div class=\"dashboard-grid\">\n    ${gridItemsHtml}\n  </div>\n</body>\n</html>\n`;\n\nreturn [{ json: { dashboardHtml: htmlDashboard } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        96
+      ],
+      "id": "733fdad8-faf2-421a-84d9-b49d457bfd5c",
+      "name": "Create Template",
+      "executeOnce": false
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Extract from Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Create Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Aggregator": {
+      "main": [
+        [
+          {
+            "node": "Generate ChartCodes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate ChartCodes": {
+      "main": [
+        [
+          {
+            "node": "Generate Charts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to CSV": {
+      "main": [
+        [
+          {
+            "node": "Extract from CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from CSV": {
+      "main": [
+        [
+          {
+            "node": "Data Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from Excel": {
+      "main": [
+        [
+          {
+            "node": "Convert to CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Charts": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Template": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c43e52e0-e87c-430f-a665-4a420b4f0d6a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "96d60b3d9d9ca9c3f9c2e95323963e59e4391ab3f104b58fce66b50043485bdc"
+  },
+  "id": "I34yPbmp3guwQX7X",
+  "tags": []
+}
